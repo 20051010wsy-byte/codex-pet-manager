@@ -6,5 +6,6 @@ dist/
 release/
 *.spec
 .pytest_cache/
+/work/
 .DS_Store
 Thumbs.db
