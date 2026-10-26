@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.0"
+    [string]$Version = "1.0.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +28,7 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item "dist\CodexPetManager.exe" $stage
 Copy-Item "README.md" $stage
 Copy-Item "LICENSE" $stage
+Copy-Item "CHANGELOG.md" $stage
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "docs") | Out-Null
 Copy-Item "docs\screenshot.png" (Join-Path $stage "docs")
 

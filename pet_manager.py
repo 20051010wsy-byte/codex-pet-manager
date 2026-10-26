@@ -25,7 +25,7 @@ from pet_core import PetRecord, PetRepository
 
 
 APP_TITLE = "桌宠管理台"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 PALETTE = {
     "bg": "#F3F6F8",
@@ -143,8 +143,6 @@ class ScrollFrame(tk.Frame):
         self.scrollbar.pack(side="right", fill="y")
         self.body.bind("<Configure>", self._on_body)
         self.canvas.bind("<Configure>", self._on_canvas)
-        self.canvas.bind("<Enter>", self._bind_wheel)
-        self.canvas.bind("<Leave>", self._unbind_wheel)
 
     def _on_body(self, _event=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -152,14 +150,10 @@ class ScrollFrame(tk.Frame):
     def _on_canvas(self, event):
         self.canvas.itemconfigure(self.window, width=event.width)
 
-    def _bind_wheel(self, _event=None):
-        self.canvas.bind_all("<MouseWheel>", self._wheel)
-
-    def _unbind_wheel(self, _event=None):
-        self.canvas.unbind_all("<MouseWheel>")
-
-    def _wheel(self, event):
-        self.canvas.yview_scroll(int(-event.delta / 120), "units")
+    def scroll_wheel(self, delta: int):
+        steps = wheel_steps(delta)
+        if steps:
+            self.canvas.yview_scroll(steps, "units")
 
 
 class ThumbnailCache:
@@ -439,6 +433,7 @@ class PetManagerApp:
         except Exception:
             pass
         self.root.protocol("WM_DELETE_WINDOW", self._close)
+        self.root.bind_all("<MouseWheel>", self._route_mousewheel, add="+")
         self.root.bind("<Control-r>", lambda _event: self.refresh())
         self.root.bind("<Delete>", lambda _event: self.delete_selected())
         self.root.bind("<F2>", lambda _event: self.edit_selected())
@@ -673,6 +668,15 @@ class PetManagerApp:
     def _set_filter(self, mode: str):
         self.filter_mode = mode
         self._apply_filter()
+
+    def _route_mousewheel(self, event):
+        widget = self.root.winfo_containing(event.x_root, event.y_root)
+        while widget is not None:
+            if isinstance(widget, ScrollFrame):
+                widget.scroll_wheel(event.delta)
+                return "break"
+            widget = widget.master
+        return None
 
     def _update_filter_chips(self):
         for key, widget in self.filter_widgets.items():
@@ -1200,6 +1204,16 @@ def human_size(size: int) -> str:
     if size >= 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size} B"
+
+
+def wheel_steps(delta: int) -> int:
+    """Keep touchpad deltas useful while capping oversized wheel events."""
+    if not delta:
+        return 0
+    steps = int(-delta / 120)
+    if steps == 0:
+        steps = -1 if delta > 0 else 1
+    return max(-5, min(5, steps))
 
 
 def main():
