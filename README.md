@@ -23,7 +23,7 @@
 从 GitHub Releases 下载：
 
 ```text
-CodexPetManager-v1.0.1-windows-x64.zip
+CodexPetManager-v1.0.2-windows-x64.zip
 ```
 
 完整解压后运行：
@@ -104,14 +104,14 @@ python -m unittest discover -s tests -v
 构建 Windows 单文件版本：
 
 ```powershell
-.\build.ps1 -Version 1.0.1
+.\build.ps1 -Version 1.0.2
 ```
 
 产物位于 `release/`。
 
 ## 发布到 GitHub
 
-仓库已经包含 `.github/workflows/build.yml`。推送 `v1.0.1` 标签后，Actions 会自动：
+仓库已经包含 `.github/workflows/build.yml`。推送 `v1.0.2` 标签后，Actions 会自动：
 
 1. 运行测试
 2. 构建 Windows 单文件程序
@@ -121,8 +121,8 @@ python -m unittest discover -s tests -v
 ```powershell
 git remote add origin https://github.com/<your-name>/<repo>.git
 git push -u origin main
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.0.2
+git push origin v1.0.2
 ```
 
 ## 隐私与数据

@@ -25,7 +25,7 @@ from pet_core import PetRecord, PetRepository
 
 
 APP_TITLE = "桌宠管理台"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 PALETTE = {
     "bg": "#F3F6F8",
@@ -422,8 +422,13 @@ class PetManagerApp:
     def _configure_root(self):
         self.root.title(f"{APP_TITLE} · Mini & Pets")
         self.root.configure(bg=PALETTE["bg"])
-        self.root.geometry("1180x780")
-        self.root.minsize(960, 660)
+        width, height = 1280, 820
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.minsize(1080, 700)
         self.root.option_add("*Font", FONT_BODY)
         try:
             icon = Path(__file__).with_name("assets") / "app.ico"
@@ -461,6 +466,7 @@ class PetManagerApp:
 
     def _build_ui(self):
         self.root.grid_rowconfigure(1, weight=1)
+        self.root.grid_rowconfigure(2, minsize=24)
         self.root.grid_columnconfigure(0, weight=1)
 
         header = tk.Frame(self.root, bg=PALETTE["surface"], height=88)
@@ -501,18 +507,21 @@ class PetManagerApp:
         self.import_button.pack(side="left")
 
         main = tk.Frame(self.root, bg=PALETTE["bg"])
-        main.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        main.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 4))
         main.grid_rowconfigure(0, weight=1)
         main.grid_columnconfigure(1, weight=1)
-        main.grid_columnconfigure(0, minsize=310)
-        main.grid_columnconfigure(2, minsize=334)
+        main.grid_columnconfigure(0, minsize=320, weight=0)
+        main.grid_columnconfigure(1, minsize=360, weight=1)
+        main.grid_columnconfigure(2, minsize=356, weight=0)
 
         self.library_panel = tk.Frame(
             main,
+            width=320,
             bg=PALETTE["surface"],
             highlightbackground=PALETTE["border"],
             highlightthickness=1,
         )
+        self.library_panel.grid_propagate(False)
         self.library_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
         self.library_panel.grid_rowconfigure(3, weight=1)
         self.library_panel.grid_columnconfigure(0, weight=1)
@@ -583,6 +592,8 @@ class PetManagerApp:
             fg=PALETTE["muted"],
             font=FONT_TINY,
             anchor="w",
+            justify="left",
+            wraplength=254,
             padx=14,
             pady=10,
         )
@@ -634,6 +645,8 @@ class PetManagerApp:
             fg=PALETTE["muted"],
             font=FONT_SMALL,
             anchor="w",
+            justify="left",
+            wraplength=300,
         )
         self.preview_hint.grid(row=0, column=0, sticky="w")
         self.quick_toggle = button(
@@ -646,10 +659,13 @@ class PetManagerApp:
 
         self.detail_panel = tk.Frame(
             main,
+            width=356,
             bg=PALETTE["surface"],
             highlightbackground=PALETTE["border"],
             highlightthickness=1,
         )
+        self.detail_panel.grid_propagate(False)
+        self.detail_panel.pack_propagate(False)
         self.detail_panel.grid(row=0, column=2, sticky="nsew", padx=(14, 0))
         self.detail_scroll = ScrollFrame(self.detail_panel, bg=PALETTE["surface"])
         self.detail_scroll.pack(fill="both", expand=True)
@@ -663,7 +679,7 @@ class PetManagerApp:
             fg=PALETTE["faint"],
             font=FONT_TINY,
             anchor="e",
-        ).place(relx=0.985, rely=0.995, anchor="se")
+        ).grid(row=2, column=0, sticky="e", padx=24, pady=(0, 5))
 
     def _set_filter(self, mode: str):
         self.filter_mode = mode
@@ -757,7 +773,7 @@ class PetManagerApp:
         name_color = PALETTE["ink"] if record.valid else PALETTE["danger"]
         name = tk.Label(
             row,
-            text=record.display_name,
+            text=shorten(record.display_name, 22),
             bg=bg,
             fg=name_color,
             font=(FONT_FAMILY, 10, "bold"),
@@ -841,11 +857,13 @@ class PetManagerApp:
         title_row.grid_columnconfigure(0, weight=1)
         tk.Label(
             title_row,
-            text=record.display_name,
+            text=shorten(record.display_name, 28),
             bg=PALETTE["surface"],
             fg=PALETTE["ink"],
             font=(FONT_FAMILY, 18, "bold"),
             anchor="w",
+            justify="left",
+            wraplength=230,
         ).grid(row=0, column=0, sticky="w")
         status_bg = PALETTE["success_soft"] if record.enabled else PALETTE["surface_alt"]
         status_fg = PALETTE["success"] if record.enabled else PALETTE["muted"]
@@ -868,7 +886,7 @@ class PetManagerApp:
             font=FONT_BODY,
             justify="left",
             anchor="w",
-            wraplength=292,
+            wraplength=310,
         ).pack(fill="x", pady=(8, 16))
 
         separator(self.detail_body).pack(fill="x", pady=(0, 14))
@@ -889,7 +907,7 @@ class PetManagerApp:
                 font=FONT_SMALL,
                 justify="left",
                 anchor="w",
-                wraplength=292,
+                wraplength=310,
                 padx=10,
                 pady=8,
             ).pack(fill="x", pady=(10, 0))
@@ -942,6 +960,8 @@ class PetManagerApp:
             fg=PALETTE["ink"],
             font=FONT_SMALL,
             anchor="w",
+            justify="left",
+            wraplength=248,
         ).pack(side="left", fill="x", expand=True)
 
     def _build_program_row(self, program: ProgramSpec):
@@ -1204,6 +1224,11 @@ def human_size(size: int) -> str:
     if size >= 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size} B"
+
+
+def shorten(value: str, limit: int) -> str:
+    value = str(value)
+    return value if len(value) <= limit else value[: max(1, limit - 1)] + "…"
 
 
 def wheel_steps(delta: int) -> int:

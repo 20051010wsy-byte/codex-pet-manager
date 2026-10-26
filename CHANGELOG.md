@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.2
+
+- Fixed the center preview collapsing when the side panels requested wider text layouts.
+- Fixed side panel widths to 320 px and 356 px so the preview receives the remaining space.
+- Moved the version footer into the normal layout flow.
+- Added wrapping and truncation for long names, descriptions, IDs, and program text.
+- Verified layout at 1080, 1280, and 1440 pixel window widths without clipped controls.
+
 ## v1.0.1
 
 - Fixed mouse wheel scrolling being disabled when the pointer moved between scroll panels.
