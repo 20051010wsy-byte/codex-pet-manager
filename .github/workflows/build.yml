@@ -37,10 +37,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: CodexPetManager-windows-x64
-          path: |
-            release/*.zip
-            release/*.exe
-            release/SHA256SUMS.txt
+          path: release/*-windows-x64.zip
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -49,7 +46,4 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           overwrite_files: true
-          files: |
-            release/*.zip
-            release/*.exe
-            release/SHA256SUMS.txt
+          files: release/*-windows-x64.zip
