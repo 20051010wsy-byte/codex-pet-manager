@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from pet_core import PetRepository
+from pet_core import PetRepository, safe_relative
 
 
 def make_sheet(path: Path, version: int = 1) -> None:
@@ -45,6 +45,15 @@ class PetRepositoryTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def test_safe_relative_accepts_windows_separator(self) -> None:
+        self.assertEqual(
+            safe_relative(r"assets\spritesheet.webp"),
+            Path("assets") / "spritesheet.webp",
+        )
+        for invalid in ("/absolute.webp", "../outside.webp", r"C:\outside.webp"):
+            with self.assertRaises(ValueError):
+                safe_relative(invalid)
 
     def test_scan_disable_enable_rename_and_delete(self) -> None:
         self.add_pet()

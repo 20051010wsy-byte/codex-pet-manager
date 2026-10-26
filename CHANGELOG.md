@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.6
+
+- Accepted Windows-style backslash paths inside pet manifests while still blocking absolute and traversal paths.
+- Removed stale cloud cache entries when Codex deletes a cloud pet.
+- Corrected local/cloud status counts and made enabled/disabled filters apply only to local pets.
+- Added closing guards for background refresh callbacks.
+- Reduced Windows builds and releases to the single recommended compatibility ZIP.
+- Added explicit Windows 10/11 64-bit compatibility guidance.
+
 ## v1.0.5
 
 - Added automatic discovery for new local Codex pets, including nested manifest folders.

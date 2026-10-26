@@ -4,11 +4,9 @@
 
 ## 下载
 
-[![下载 Windows x64](https://img.shields.io/badge/下载-Windows%20x64-137C8B?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.5/CodexPetManager-v1.0.5-windows-x64.zip)
+[![下载 Windows x64](https://img.shields.io/badge/下载-Windows%20x64-137C8B?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.6/CodexPetManager-v1.0.6-windows-x64.zip)
 
-SHA-256：`ec38ba62f79039cc37df8d3f9eb80d081020a771977e51e195f76ff14f898f1d`
-
-完整解压后，保留 `CodexPetManager.exe` 与 `_internal` 文件夹的相对位置，再运行 EXE。程序无需安装 Python，也不会使用 UPX 压缩。目前没有数字签名，Windows SmartScreen 可能询问一次发布者信息。
+适用于 Windows 10/11 64 位。完整解压后，保留 `CodexPetManager.exe` 与 `_internal` 文件夹的相对位置，再运行 EXE。程序无需安装 Python，也不会使用 UPX 压缩。目前没有数字签名，Windows SmartScreen 可能询问一次发布者信息。
 
 ![Codex Pet Manager](docs/screenshot.png)
 

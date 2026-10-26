@@ -4,6 +4,7 @@ import ipaddress
 import json
 import os
 import re
+import shutil
 import sys
 import urllib.error
 import urllib.parse
@@ -44,13 +45,21 @@ class CloudSyncResult:
     added: int = 0
     updated: int = 0
     unchanged: int = 0
+    removed: int = 0
     failed: int = 0
     storage_paths: list[Path] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
     @property
     def changed(self) -> bool:
-        return bool(self.added or self.updated)
+        return bool(self.added or self.updated or self.removed)
+
+
+@dataclass
+class CloudCacheSnapshot:
+    found: bool = False
+    artworks: list[CloudPetArtwork] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 def default_cloud_cache_dir() -> Path:
@@ -176,46 +185,60 @@ def parse_cloud_artworks(raw: str) -> list[CloudPetArtwork]:
 def _read_artworks_from_store(
     path: Path,
     store_factory: Callable[[Path], object],
-) -> list[CloudPetArtwork]:
+) -> tuple[bool, list[CloudPetArtwork]]:
     store = store_factory(path)
     try:
+        found = False
         candidates = []
         for storage_key in store.iter_storage_keys():
             if storage_key != CLOUD_STORAGE_KEY:
                 continue
             if not store.contains_script_key(storage_key, CLOUD_CACHE_KEY):
                 continue
+            found = True
             for record in store.iter_records_for_script_key(
                 storage_key,
                 CLOUD_CACHE_KEY,
                 include_deletions=True,
                 raise_on_no_result=False,
             ):
-                if record.value:
-                    candidates.append(record)
+                candidates.append(record)
         if not candidates:
-            return []
+            return found, []
         latest = max(candidates, key=lambda record: record.leveldb_seq_number)
-        return parse_cloud_artworks(latest.value)
+        if not latest.value:
+            return found, []
+        return found, parse_cloud_artworks(latest.value)
     finally:
         store.close()
+
+
+def read_cloud_cache(
+    paths: list[Path] | None = None,
+    store_factory: Callable[[Path], object] | None = None,
+) -> CloudCacheSnapshot:
+    paths = paths if paths is not None else discover_codex_local_storage_dirs()
+    store_factory = store_factory or LocalStoreDb
+    artworks: dict[str, CloudPetArtwork] = {}
+    snapshot = CloudCacheSnapshot()
+    for path in paths:
+        try:
+            found, path_artworks = _read_artworks_from_store(path, store_factory)
+            snapshot.found = snapshot.found or found
+            for artwork in path_artworks:
+                artworks[artwork.id] = artwork
+        except Exception as error:
+            snapshot.errors.append(f"{path}: {error}")
+    snapshot.artworks = list(artworks.values())
+    return snapshot
 
 
 def read_cloud_artworks(
     paths: list[Path] | None = None,
     store_factory: Callable[[Path], object] | None = None,
 ) -> tuple[list[CloudPetArtwork], list[str]]:
-    paths = paths if paths is not None else discover_codex_local_storage_dirs()
-    store_factory = store_factory or LocalStoreDb
-    artworks: dict[str, CloudPetArtwork] = {}
-    errors = []
-    for path in paths:
-        try:
-            for artwork in _read_artworks_from_store(path, store_factory):
-                artworks[artwork.id] = artwork
-        except Exception as error:
-            errors.append(f"{path}: {error}")
-    return list(artworks.values()), errors
+    snapshot = read_cloud_cache(paths, store_factory)
+    return snapshot.artworks, snapshot.errors
 
 
 class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -307,6 +330,7 @@ def sync_cloud_artworks(
     cache_dir: Path,
     artworks: list[CloudPetArtwork],
     fetch_bytes: Callable[[str], tuple[bytes, str, int]] = fetch_cloud_artwork,
+    prune_missing: bool = False,
 ) -> CloudSyncResult:
     result = CloudSyncResult(discovered=len(artworks))
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -342,6 +366,23 @@ def sync_cloud_artworks(
         except Exception as error:
             result.failed += 1
             result.errors.append(f"{artwork.id}: {error}")
+    if prune_missing:
+        current_ids = {artwork.id for artwork in artworks}
+        cache_root = cache_dir.resolve()
+        for folder in cache_dir.iterdir():
+            if not folder.is_dir() or not folder.name.startswith("pet_"):
+                continue
+            if folder.name in current_ids:
+                continue
+            resolved = folder.resolve()
+            if not resolved.is_relative_to(cache_root):
+                continue
+            try:
+                shutil.rmtree(folder)
+                result.removed += 1
+            except OSError as error:
+                result.failed += 1
+                result.errors.append(f"{folder.name}: {error}")
     return result
 
 
@@ -352,8 +393,13 @@ def sync_codex_cloud_pets(
     fetch_bytes: Callable[[str], tuple[bytes, str, int]] = fetch_cloud_artwork,
 ) -> CloudSyncResult:
     storage_paths = paths if paths is not None else discover_codex_local_storage_dirs()
-    artworks, errors = read_cloud_artworks(storage_paths, store_factory=store_factory)
-    result = sync_cloud_artworks(cache_dir or default_cloud_cache_dir(), artworks, fetch_bytes)
+    snapshot = read_cloud_cache(storage_paths, store_factory=store_factory)
+    result = sync_cloud_artworks(
+        cache_dir or default_cloud_cache_dir(),
+        snapshot.artworks,
+        fetch_bytes,
+        prune_missing=snapshot.found and not snapshot.errors,
+    )
     result.storage_paths = storage_paths
-    result.errors = errors + result.errors
+    result.errors = snapshot.errors + result.errors
     return result

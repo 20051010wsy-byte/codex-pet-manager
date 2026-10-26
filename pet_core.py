@@ -9,7 +9,7 @@ import tempfile
 import unicodedata
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 from PIL import Image
@@ -95,12 +95,13 @@ def atomic_json(path: Path, value: dict) -> None:
 def safe_relative(value: str) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("素材路径为空")
-    if "\\" in value or ":" in value:
+    normalized = value.strip().replace("\\", "/")
+    if "\x00" in normalized or ":" in normalized:
         raise ValueError("素材路径包含不支持的字符")
-    relative = Path(value)
+    relative = PurePosixPath(normalized)
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError("素材路径越界")
-    return relative
+    return Path(*relative.parts)
 
 
 def inspect_sprite(path: Path, version: int) -> tuple[int, int, int]:

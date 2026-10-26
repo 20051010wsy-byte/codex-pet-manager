@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 from codex_cloud import (
     CLOUD_CACHE_KEY,
     CloudPetArtwork,
+    read_cloud_cache,
     parse_cloud_artworks,
     read_cloud_artworks,
     sync_cloud_artworks,
@@ -25,7 +26,7 @@ def artwork_bytes() -> bytes:
 
 
 class FakeStore:
-    def __init__(self, value: str):
+    def __init__(self, value: str | None):
         self.value = value
         self.closed = False
 
@@ -91,6 +92,12 @@ class CodexCloudTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertTrue(created[0][1].closed)
 
+    def test_deleted_cache_value_does_not_restore_old_records(self) -> None:
+        snapshot = read_cloud_cache([Path("fake-leveldb")], lambda _path: FakeStore(None))
+        self.assertTrue(snapshot.found)
+        self.assertEqual(snapshot.artworks, [])
+        self.assertEqual(snapshot.errors, [])
+
     def test_syncs_artwork_and_reuses_matching_fingerprint(self) -> None:
         artwork = CloudPetArtwork(
             id="pet_sync123",
@@ -114,6 +121,28 @@ class CodexCloudTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertTrue((cache / artwork.id / "pet.json").is_file())
             self.assertTrue((cache / artwork.id / "spritesheet.png").is_file())
+
+    def test_sync_prunes_cloud_pets_removed_from_codex(self) -> None:
+        artwork = CloudPetArtwork(
+            id="pet_current",
+            sprite_version=1,
+            spritesheet_url="https://chatgpt.com/pets/share/sharepet_4/sprite",
+            fingerprint="fingerprint-current",
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            cache = Path(temp)
+            stale = cache / "pet_removed"
+            stale.mkdir(parents=True)
+            (stale / "pet.json").write_text("{}", encoding="utf-8")
+            result = sync_cloud_artworks(
+                cache,
+                [artwork],
+                lambda _url: (artwork_bytes(), "png", 1),
+                prune_missing=True,
+            )
+            self.assertEqual(result.removed, 1)
+            self.assertFalse(stale.exists())
+            self.assertTrue((cache / artwork.id / "pet.json").is_file())
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ from pet_core import PetRecord, PetRepository
 
 
 APP_TITLE = "桌宠管理台"
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 
 PALETTE = {
     "bg": "#F3F6F8",
@@ -421,6 +421,9 @@ class PetManagerApp:
         self.after_pet_poll = None
         self.after_cloud_poll = None
         self.after_cloud_result = None
+        self.after_cloud_start = None
+        self.after_status_reset = None
+        self.closing = False
         self.cloud_sync_running = False
         self.cloud_result_queue = queue.Queue()
         self.last_pet_signature = None
@@ -433,7 +436,9 @@ class PetManagerApp:
         self._build_ui()
         self.refresh(select_first=True)
         self._refresh_programs()
-        self.root.after(200, lambda: self._request_cloud_sync(force=True))
+        self.after_cloud_start = self.root.after(
+            200, lambda: self._request_cloud_sync(force=True)
+        )
         self._schedule_local_poll()
         self._schedule_cloud_poll()
 
@@ -589,7 +594,11 @@ class PetManagerApp:
         filters = tk.Frame(self.library_panel, bg=PALETTE["surface"])
         filters.grid(row=2, column=0, sticky="ew", padx=16, pady=12)
         self.filter_widgets = {}
-        for key, label in (("all", "全部"), ("enabled", "已启用"), ("disabled", "已停用")):
+        for key, label in (
+            ("all", "全部"),
+            ("enabled", "本地启用"),
+            ("disabled", "本地停用"),
+        ):
             chip = tk.Label(
                 filters,
                 text=label,
@@ -608,7 +617,7 @@ class PetManagerApp:
         self.list_scroll.grid(row=3, column=0, sticky="nsew", padx=(8, 4), pady=(0, 8))
         note = tk.Label(
             self.library_panel,
-            text="停用后不会出现在 Mini & Pets 的人物列表中",
+            text="云端人物只读；本地人物停用后不会出现在列表中",
             bg=PALETTE["surface_alt"],
             fg=PALETTE["muted"],
             font=FONT_TINY,
@@ -737,8 +746,7 @@ class PetManagerApp:
             self.selected_id = self.records[0].id if self.records else None
         else:
             self.selected_id = None
-        active = sum(1 for record in self.records if record.enabled)
-        self.stats_label.configure(text=f"{active} 已启用 · {len(self.records)} 个人物")
+        self.stats_label.configure(text=self._stats_text())
         self.library_count.configure(text=str(len(self.records)))
         self.last_pet_signature = self.repository.signature()
         self._apply_filter()
@@ -749,6 +757,8 @@ class PetManagerApp:
         self._request_cloud_sync(force=True)
 
     def _schedule_local_poll(self):
+        if self.closing:
+            return
         self.after_pet_poll = self.root.after(3000, self._poll_local_changes)
 
     def _poll_local_changes(self):
@@ -761,6 +771,8 @@ class PetManagerApp:
             self._schedule_local_poll()
 
     def _schedule_cloud_poll(self):
+        if self.closing:
+            return
         self.after_cloud_poll = self.root.after(15000, self._poll_cloud_changes)
 
     def _poll_cloud_changes(self):
@@ -771,7 +783,7 @@ class PetManagerApp:
             self._schedule_cloud_poll()
 
     def _request_cloud_sync(self, force: bool = False):
-        if self.cloud_sync_running:
+        if self.closing or self.cloud_sync_running:
             return
         self.cloud_storage_paths = discover_codex_local_storage_dirs()
         signature = local_storage_signature(self.cloud_storage_paths)
@@ -824,9 +836,13 @@ class PetManagerApp:
         query = self.search_var.get().strip().casefold()
         self.filtered = []
         for record in self.records:
-            if self.filter_mode == "enabled" and not record.enabled:
+            if self.filter_mode == "enabled" and (
+                not record.enabled or record.is_cloud
+            ):
                 continue
-            if self.filter_mode == "disabled" and record.enabled:
+            if self.filter_mode == "disabled" and (
+                record.enabled or record.is_cloud
+            ):
                 continue
             if query and query not in (
                 record.display_name + " " + record.description + " " + record.id
@@ -1165,7 +1181,7 @@ class PetManagerApp:
             if not record.enabled:
                 self.repository.enable(record.id)
             self.refresh()
-            self._status(f"Mini & Pets 目前只保留「{record.display_name}」")
+            self._status(f"本地人物目前只保留「{record.display_name}」")
         except Exception as error:
             messagebox.showerror("操作失败", str(error), parent=self.root)
 
@@ -1319,19 +1335,35 @@ class PetManagerApp:
 
     def _status(self, text: str):
         self.stats_label.configure(text=text)
-        self.root.after(4000, lambda: self.stats_label.configure(
-            text=(
-                f"{sum(1 for item in self.records if item.enabled)} 已启用 · "
+        if self.after_status_reset:
+            self.root.after_cancel(self.after_status_reset)
+        self.after_status_reset = self.root.after(4000, self._restore_stats)
+
+    def _restore_stats(self):
+        self.after_status_reset = None
+        self.stats_label.configure(text=self._stats_text())
+
+    def _stats_text(self) -> str:
+        local_active = sum(
+            1 for item in self.records if item.enabled and not item.is_cloud
+        )
+        cloud_count = sum(1 for item in self.records if item.is_cloud)
+        if cloud_count:
+            return (
+                f"{local_active} 本地启用 · {cloud_count} 云端缓存 · "
                 f"{len(self.records)} 个人物"
             )
-        ))
+        return f"{local_active} 本地启用 · {len(self.records)} 个人物"
 
     def _close(self):
+        self.closing = True
         for callback in (
             self.after_program_refresh,
             self.after_pet_poll,
             self.after_cloud_poll,
             self.after_cloud_result,
+            self.after_cloud_start,
+            self.after_status_reset,
         ):
             if callback:
                 try:

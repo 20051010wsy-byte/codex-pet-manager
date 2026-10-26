@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.5"
+    [string]$Version = "1.0.6"
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,16 +43,6 @@ python -m PyInstaller @commonArgs `
     --workpath $compatBuild `
     --specpath $compatSpec
 
-$singleDist = Join-Path $distRoot "single"
-$singleBuild = Join-Path $buildRoot "single"
-$singleSpec = Join-Path $specRoot "single"
-New-Item -ItemType Directory -Force -Path $singleSpec | Out-Null
-python -m PyInstaller @commonArgs `
-    --onefile `
-    --distpath $singleDist `
-    --workpath $singleBuild `
-    --specpath $singleSpec
-
 function Copy-ReleaseDocs {
     param([string]$Destination)
 
@@ -72,28 +62,8 @@ New-Item -ItemType Directory -Force -Path $compatStage | Out-Null
 Copy-Item -Path (Join-Path $compatDist "CodexPetManager\*") -Destination $compatStage -Recurse
 Copy-ReleaseDocs $compatStage
 
-$singleStage = Join-Path $releaseRoot "CodexPetManager-v$Version-single-file-x64"
-if (Test-Path -LiteralPath $singleStage) {
-    Remove-Item -LiteralPath $singleStage -Recurse -Force
-}
-New-Item -ItemType Directory -Force -Path $singleStage | Out-Null
-Copy-Item -LiteralPath (Join-Path $singleDist "CodexPetManager.exe") -Destination $singleStage
-Copy-ReleaseDocs $singleStage
-
 $compatArchive = Join-Path $releaseRoot "CodexPetManager-v$Version-windows-x64.zip"
-$singleArchive = Join-Path $releaseRoot "CodexPetManager-v$Version-single-file-x64.zip"
-$singleExe = Join-Path $releaseRoot "CodexPetManager-v$Version-single-file-x64.exe"
 Compress-Archive -Path (Join-Path $compatStage "*") -DestinationPath $compatArchive -Force
-Compress-Archive -Path (Join-Path $singleStage "*") -DestinationPath $singleArchive -Force
-Copy-Item -LiteralPath (Join-Path $singleDist "CodexPetManager.exe") -Destination $singleExe -Force
-
-$artifacts = @($compatArchive, $singleArchive, $singleExe)
-$checksums = foreach ($artifact in $artifacts) {
-    $hash = Get-FileHash -LiteralPath $artifact -Algorithm SHA256
-    "$($hash.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($artifact))"
-}
-$checksums | Set-Content -Path (Join-Path $releaseRoot "SHA256SUMS.txt") -Encoding ascii
-
-foreach ($artifact in $artifacts) {
-    Write-Host "Built: $artifact"
-}
+$hash = Get-FileHash -LiteralPath $compatArchive -Algorithm SHA256
+Write-Host "Built: $compatArchive"
+Write-Host "SHA256: $($hash.Hash.ToLowerInvariant())"
