@@ -5,13 +5,17 @@
 ## 下载
 
 [![下载 Windows x64](https://img.shields.io/badge/下载-Windows%20x64-137C8B?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/latest)
-[![下载源码](https://img.shields.io/badge/下载-源码-384956?style=for-the-badge&logo=github&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.3/CodexPetManager-v1.0.3-source.zip)
+[![下载源码](https://img.shields.io/badge/下载-源码-384956?style=for-the-badge&logo=github&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/archive/refs/tags/v1.0.4.zip)
 
-- [Windows x64 免安装版](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.3/CodexPetManager-v1.0.3-windows-x64.zip)
-- [完整源码 ZIP](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.3/CodexPetManager-v1.0.3-source.zip)
-- [全部版本与校验文件](https://github.com/20051010wsy-byte/codex-pet-manager/releases/tag/v1.0.3)
+- [Windows x64 兼容版（推荐）](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.4/CodexPetManager-v1.0.4-windows-x64.zip)
+- [Windows x64 单文件版](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.4/CodexPetManager-v1.0.4-single-file-x64.zip)
+- [直接下载单文件 EXE](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.4/CodexPetManager-v1.0.4-single-file-x64.exe)
+- [完整源码 ZIP](https://github.com/20051010wsy-byte/codex-pet-manager/archive/refs/tags/v1.0.4.zip)
+- [全部版本与校验文件](https://github.com/20051010wsy-byte/codex-pet-manager/releases/tag/v1.0.4)
 
-Windows 用户下载免安装版 ZIP，完整解压后运行 `CodexPetManager.exe`，无需安装 Python。
+Windows 用户优先下载兼容版 ZIP。完整解压后，保留 `CodexPetManager.exe` 与 `_internal` 文件夹的相对位置，再运行 EXE。兼容版无需自解压，也不会使用 UPX 压缩，可减少被安全软件误拦截的情况。
+
+单文件版启动时会临时解压运行文件；如果电脑的临时目录或安全策略阻止解压，请改用兼容版。程序目前没有数字签名，Windows SmartScreen 可能询问一次发布者信息。
 
 ![Codex Pet Manager](docs/screenshot.png)
 

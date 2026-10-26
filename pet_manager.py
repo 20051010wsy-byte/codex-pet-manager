@@ -25,7 +25,7 @@ from pet_core import PetRecord, PetRepository
 
 
 APP_TITLE = "桌宠管理台"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 
 PALETTE = {
     "bg": "#F3F6F8",

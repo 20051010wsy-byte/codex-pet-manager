@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.4
+
+- Added a recommended folder-based portable build that avoids one-file self-extraction.
+- Disabled UPX compression for every release build to reduce antivirus false positives.
+- Kept an optional single-file build with UPX disabled.
+- Updated GitHub Actions to publish both Windows packages and standalone EXE.
+
 ## v1.0.3
 
 - Fixed the header subtitle overlapping the top of the Mini & Pets library panel at 125% DPI.

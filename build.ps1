@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.3"
+    [string]$Version = "1.0.4"
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,36 +9,87 @@ Set-Location $root
 python -m pip install --disable-pip-version-check -r requirements.txt pyinstaller
 python -m unittest discover -s tests -v
 
-python -m PyInstaller `
-    --noconfirm `
-    --clean `
+$script = Join-Path $root "pet_manager.py"
+$icon = Join-Path $root "assets\app.ico"
+$distRoot = Join-Path $root "dist"
+$buildRoot = Join-Path $root "build"
+$specRoot = Join-Path $root "build\spec"
+$releaseRoot = Join-Path $root "release"
+New-Item -ItemType Directory -Force -Path $distRoot, $buildRoot, $specRoot, $releaseRoot | Out-Null
+
+$commonArgs = @(
+    "--noconfirm",
+    "--clean",
+    "--windowed",
+    "--noupx",
+    "--name", "CodexPetManager",
+    "--icon", $icon,
+    "--add-data", "$icon;assets",
+    "--hidden-import", "PIL._tkinter_finder",
+    $script
+)
+
+$compatDist = Join-Path $distRoot "compat"
+$compatBuild = Join-Path $buildRoot "compat"
+$compatSpec = Join-Path $specRoot "compat"
+New-Item -ItemType Directory -Force -Path $compatSpec | Out-Null
+python -m PyInstaller @commonArgs `
+    --onedir `
+    --distpath $compatDist `
+    --workpath $compatBuild `
+    --specpath $compatSpec
+
+$singleDist = Join-Path $distRoot "single"
+$singleBuild = Join-Path $buildRoot "single"
+$singleSpec = Join-Path $specRoot "single"
+New-Item -ItemType Directory -Force -Path $singleSpec | Out-Null
+python -m PyInstaller @commonArgs `
     --onefile `
-    --windowed `
-    --name "CodexPetManager" `
-    --icon "assets\app.ico" `
-    --add-data "assets\app.ico;assets" `
-    --hidden-import "PIL._tkinter_finder" `
-    "pet_manager.py"
+    --distpath $singleDist `
+    --workpath $singleBuild `
+    --specpath $singleSpec
 
-$stage = Join-Path $root "release\CodexPetManager-v$Version-windows-x64"
-if (Test-Path $stage) {
-    Remove-Item -LiteralPath $stage -Recurse -Force
+function Copy-ReleaseDocs {
+    param([string]$Destination)
+
+    foreach ($file in @("README.md", "LICENSE", "CHANGELOG.md")) {
+        Copy-Item -LiteralPath (Join-Path $root $file) -Destination $Destination
+    }
+    $docs = Join-Path $Destination "docs"
+    New-Item -ItemType Directory -Force -Path $docs | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root "docs\screenshot.png") -Destination $docs
 }
-New-Item -ItemType Directory -Force -Path $stage | Out-Null
-Copy-Item "dist\CodexPetManager.exe" $stage
-Copy-Item "README.md" $stage
-Copy-Item "LICENSE" $stage
-Copy-Item "CHANGELOG.md" $stage
-New-Item -ItemType Directory -Force -Path (Join-Path $stage "docs") | Out-Null
-Copy-Item "docs\screenshot.png" (Join-Path $stage "docs")
 
-$archive = Join-Path $root "release\CodexPetManager-v$Version-windows-x64.zip"
-if (Test-Path $archive) {
-    Remove-Item -LiteralPath $archive -Force
+$compatStage = Join-Path $releaseRoot "CodexPetManager-v$Version-windows-x64"
+if (Test-Path -LiteralPath $compatStage) {
+    Remove-Item -LiteralPath $compatStage -Recurse -Force
 }
-Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive
-$hash = Get-FileHash $archive -Algorithm SHA256
-"$($hash.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($archive))" |
-    Set-Content -Path "release\SHA256SUMS.txt" -Encoding ascii
+New-Item -ItemType Directory -Force -Path $compatStage | Out-Null
+Copy-Item -Path (Join-Path $compatDist "CodexPetManager\*") -Destination $compatStage -Recurse
+Copy-ReleaseDocs $compatStage
 
-Write-Host "Built: $archive"
+$singleStage = Join-Path $releaseRoot "CodexPetManager-v$Version-single-file-x64"
+if (Test-Path -LiteralPath $singleStage) {
+    Remove-Item -LiteralPath $singleStage -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $singleStage | Out-Null
+Copy-Item -LiteralPath (Join-Path $singleDist "CodexPetManager.exe") -Destination $singleStage
+Copy-ReleaseDocs $singleStage
+
+$compatArchive = Join-Path $releaseRoot "CodexPetManager-v$Version-windows-x64.zip"
+$singleArchive = Join-Path $releaseRoot "CodexPetManager-v$Version-single-file-x64.zip"
+$singleExe = Join-Path $releaseRoot "CodexPetManager-v$Version-single-file-x64.exe"
+Compress-Archive -Path (Join-Path $compatStage "*") -DestinationPath $compatArchive -Force
+Compress-Archive -Path (Join-Path $singleStage "*") -DestinationPath $singleArchive -Force
+Copy-Item -LiteralPath (Join-Path $singleDist "CodexPetManager.exe") -Destination $singleExe -Force
+
+$artifacts = @($compatArchive, $singleArchive, $singleExe)
+$checksums = foreach ($artifact in $artifacts) {
+    $hash = Get-FileHash -LiteralPath $artifact -Algorithm SHA256
+    "$($hash.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($artifact))"
+}
+$checksums | Set-Content -Path (Join-Path $releaseRoot "SHA256SUMS.txt") -Encoding ascii
+
+foreach ($artifact in $artifacts) {
+    Write-Host "Built: $artifact"
+}
