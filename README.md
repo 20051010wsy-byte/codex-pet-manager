@@ -2,6 +2,17 @@
 
 一个用于管理 Codex **Mini & Pets** 本地人物的小型 Windows 桌面工具。
 
+## 下载
+
+[![下载 Windows x64](https://img.shields.io/badge/下载-Windows%20x64-137C8B?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/latest)
+[![下载源码](https://img.shields.io/badge/下载-源码-384956?style=for-the-badge&logo=github&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.3/CodexPetManager-v1.0.3-source.zip)
+
+- [Windows x64 免安装版](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.3/CodexPetManager-v1.0.3-windows-x64.zip)
+- [完整源码 ZIP](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.3/CodexPetManager-v1.0.3-source.zip)
+- [全部版本与校验文件](https://github.com/20051010wsy-byte/codex-pet-manager/releases/tag/v1.0.3)
+
+Windows 用户下载免安装版 ZIP，完整解压后运行 `CodexPetManager.exe`，无需安装 Python。
+
 ![Codex Pet Manager](docs/screenshot.png)
 
 ## 功能
@@ -17,22 +28,6 @@
 - 启动或停止 BailongPet、dsh-pet
 
 管理台通过移动本地人物目录来控制人物是否出现在 Mini & Pets 的候选中。最终显示哪个人物，仍然在 Codex 的 **设置 → Mini & Pets** 里选择。
-
-## 直接运行
-
-从 GitHub Releases 下载：
-
-```text
-CodexPetManager-v1.0.3-windows-x64.zip
-```
-
-完整解压后运行：
-
-```text
-CodexPetManager.exe
-```
-
-无需安装 Python，适用于 Windows 10/11 x64。
 
 ## 从源码运行
 
