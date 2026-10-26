@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.3
+
+- Fixed the header subtitle overlapping the top of the Mini & Pets library panel at 125% DPI.
+- Added an explicit 104 px header row height so title and subtitle remain inside the header.
+- Rechecked text bounds and panel positions at 1080, 1280, and 1440 pixel window widths.
+
 ## v1.0.2
 
 - Fixed the center preview collapsing when the side panels requested wider text layouts.

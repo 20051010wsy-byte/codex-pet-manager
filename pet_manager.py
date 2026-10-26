@@ -25,7 +25,7 @@ from pet_core import PetRecord, PetRepository
 
 
 APP_TITLE = "桌宠管理台"
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 
 PALETTE = {
     "bg": "#F3F6F8",
@@ -467,9 +467,10 @@ class PetManagerApp:
     def _build_ui(self):
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_rowconfigure(2, minsize=24)
+        self.root.grid_rowconfigure(0, minsize=104)
         self.root.grid_columnconfigure(0, weight=1)
 
-        header = tk.Frame(self.root, bg=PALETTE["surface"], height=88)
+        header = tk.Frame(self.root, bg=PALETTE["surface"], height=104)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
         header.grid_columnconfigure(1, weight=1)
