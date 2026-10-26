@@ -3,9 +3,11 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,11 +23,16 @@ from tkinter import filedialog, messagebox, ttk
 import psutil
 from PIL import Image, ImageDraw, ImageTk
 
+from codex_cloud import (
+    discover_codex_local_storage_dirs,
+    local_storage_signature,
+    sync_codex_cloud_pets,
+)
 from pet_core import PetRecord, PetRepository
 
 
 APP_TITLE = "桌宠管理台"
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 
 PALETTE = {
     "bg": "#F3F6F8",
@@ -411,6 +418,14 @@ class PetManagerApp:
         self.thumbnails = ThumbnailCache()
         self.records_by_id: dict[str, PetRecord] = {}
         self.after_program_refresh = None
+        self.after_pet_poll = None
+        self.after_cloud_poll = None
+        self.after_cloud_result = None
+        self.cloud_sync_running = False
+        self.cloud_result_queue = queue.Queue()
+        self.last_pet_signature = None
+        self.last_cloud_signature = None
+        self.cloud_storage_paths = discover_codex_local_storage_dirs()
         self.programs = self._build_programs()
         self.program_widgets: dict[str, tuple[tk.Label, tk.Button]] = {}
 
@@ -418,6 +433,9 @@ class PetManagerApp:
         self._build_ui()
         self.refresh(select_first=True)
         self._refresh_programs()
+        self.root.after(200, lambda: self._request_cloud_sync(force=True))
+        self._schedule_local_poll()
+        self._schedule_cloud_poll()
 
     def _configure_root(self):
         self.root.title(f"{APP_TITLE} · Mini & Pets")
@@ -439,7 +457,7 @@ class PetManagerApp:
             pass
         self.root.protocol("WM_DELETE_WINDOW", self._close)
         self.root.bind_all("<MouseWheel>", self._route_mousewheel, add="+")
-        self.root.bind("<Control-r>", lambda _event: self.refresh())
+        self.root.bind("<Control-r>", lambda _event: self.manual_refresh())
         self.root.bind("<Delete>", lambda _event: self.delete_selected())
         self.root.bind("<F2>", lambda _event: self.edit_selected())
 
@@ -503,7 +521,9 @@ class PetManagerApp:
             font=FONT_SMALL,
         )
         self.stats_label.pack(side="left", padx=(0, 16))
-        button(actions, "刷新", self.refresh, "secondary").pack(side="left", padx=(0, 8))
+        button(actions, "刷新", self.manual_refresh, "secondary").pack(
+            side="left", padx=(0, 8)
+        )
         self.import_button = button(actions, "导入人物", self._show_import_menu, "primary")
         self.import_button.pack(side="left")
 
@@ -720,7 +740,85 @@ class PetManagerApp:
         active = sum(1 for record in self.records if record.enabled)
         self.stats_label.configure(text=f"{active} 已启用 · {len(self.records)} 个人物")
         self.library_count.configure(text=str(len(self.records)))
+        self.last_pet_signature = self.repository.signature()
         self._apply_filter()
+
+    def manual_refresh(self):
+        self.refresh()
+        self._status("正在同步 Codex 本地与云端人物…")
+        self._request_cloud_sync(force=True)
+
+    def _schedule_local_poll(self):
+        self.after_pet_poll = self.root.after(3000, self._poll_local_changes)
+
+    def _poll_local_changes(self):
+        try:
+            signature = self.repository.signature()
+            if signature != self.last_pet_signature:
+                self.refresh()
+                self._status("检测到 Codex 新人物，已自动刷新")
+        finally:
+            self._schedule_local_poll()
+
+    def _schedule_cloud_poll(self):
+        self.after_cloud_poll = self.root.after(15000, self._poll_cloud_changes)
+
+    def _poll_cloud_changes(self):
+        try:
+            self.cloud_storage_paths = discover_codex_local_storage_dirs()
+            self._request_cloud_sync()
+        finally:
+            self._schedule_cloud_poll()
+
+    def _request_cloud_sync(self, force: bool = False):
+        if self.cloud_sync_running:
+            return
+        self.cloud_storage_paths = discover_codex_local_storage_dirs()
+        signature = local_storage_signature(self.cloud_storage_paths)
+        if not force and signature == self.last_cloud_signature:
+            return
+        self.last_cloud_signature = signature
+        self.cloud_sync_running = True
+        worker = threading.Thread(target=self._cloud_sync_worker, daemon=True)
+        worker.start()
+        if self.after_cloud_result is None:
+            self.after_cloud_result = self.root.after(300, self._poll_cloud_result)
+
+    def _cloud_sync_worker(self):
+        try:
+            result = sync_codex_cloud_pets(
+                self.repository.cloud_dir,
+                paths=self.cloud_storage_paths,
+            )
+            self.cloud_result_queue.put(("ok", result))
+        except Exception as error:
+            self.cloud_result_queue.put(("error", str(error)))
+
+    def _poll_cloud_result(self):
+        self.after_cloud_result = None
+        try:
+            status, payload = self.cloud_result_queue.get_nowait()
+        except queue.Empty:
+            self.after_cloud_result = self.root.after(300, self._poll_cloud_result)
+            return
+        self.cloud_sync_running = False
+        if status == "error":
+            self.last_cloud_signature = None
+            self._status(f"云端人物同步失败：{shorten(payload, 60)}")
+            return
+        if payload.changed:
+            self.refresh()
+        if payload.discovered:
+            self._status(
+                f"已同步 {payload.discovered} 个云端人物"
+                + (f" · {payload.failed} 个失败" if payload.failed else "")
+            )
+        elif payload.failed:
+            self._status(f"云端人物缓存读取完成 · {payload.failed} 个图集暂不可用")
+        elif payload.errors and not payload.discovered:
+            self._status(f"云端人物缓存读取失败：{shorten(payload.errors[0], 54)}")
+        if payload.failed or (payload.errors and not payload.discovered):
+            self.last_cloud_signature = None
 
     def _apply_filter(self):
         query = self.search_var.get().strip().casefold()
@@ -840,14 +938,24 @@ class PetManagerApp:
             self.quick_toggle.configure(state="disabled")
             return
 
-        self.quick_toggle.configure(
-            state="normal",
-            text="停用人物" if record.enabled else "启用到 Mini & Pets",
-            bg=PALETTE["danger_soft"] if record.enabled else PALETTE["success"],
-            fg=PALETTE["danger"] if record.enabled else "#FFFFFF",
-            activebackground="#F7DADA" if record.enabled else "#257356",
-            activeforeground=PALETTE["danger"] if record.enabled else "#FFFFFF",
-        )
+        if record.is_cloud:
+            self.quick_toggle.configure(
+                state="disabled",
+                text="Codex 云端只读",
+                bg=PALETTE["surface_alt"],
+                fg=PALETTE["muted"],
+                activebackground=PALETTE["surface_alt"],
+                activeforeground=PALETTE["muted"],
+            )
+        else:
+            self.quick_toggle.configure(
+                state="normal",
+                text="停用人物" if record.enabled else "启用到 Mini & Pets",
+                bg=PALETTE["danger_soft"] if record.enabled else PALETTE["success"],
+                fg=PALETTE["danger"] if record.enabled else "#FFFFFF",
+                activebackground="#F7DADA" if record.enabled else "#257356",
+                activeforeground=PALETTE["danger"] if record.enabled else "#FFFFFF",
+            )
         self.preview.set_pet(record)
         self.preview_hint.configure(
             text=f"{record.display_name} · {STATE_SPECS[self.preview.state_index][1]}"
@@ -916,18 +1024,25 @@ class PetManagerApp:
         action_grid = tk.Frame(self.detail_body, bg=PALETTE["surface"])
         action_grid.pack(fill="x", pady=(18, 0))
         action_grid.grid_columnconfigure((0, 1), weight=1)
-        button(action_grid, "编辑信息", self.edit_selected, "secondary").grid(
+        edit_action = button(action_grid, "编辑信息", self.edit_selected, "secondary")
+        edit_action.grid(
             row=0, column=0, sticky="ew", padx=(0, 4), pady=4
         )
         button(action_grid, "打开目录", self.open_selected_folder, "secondary").grid(
             row=0, column=1, sticky="ew", padx=(4, 0), pady=4
         )
-        button(action_grid, "仅保留此人物", self.only_selected, "ghost").grid(
+        only_action = button(action_grid, "仅保留此人物", self.only_selected, "ghost")
+        only_action.grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=4
         )
-        button(action_grid, "删除人物", self.delete_selected, "danger").grid(
+        delete_action = button(action_grid, "删除人物", self.delete_selected, "danger")
+        delete_action.grid(
             row=2, column=0, columnspan=2, sticky="ew", pady=4
         )
+        if record.is_cloud:
+            edit_action.configure(state="disabled")
+            only_action.configure(state="disabled")
+            delete_action.configure(state="disabled")
 
         separator(self.detail_body).pack(fill="x", pady=(20, 14))
         tk.Label(
@@ -1006,6 +1121,9 @@ class PetManagerApp:
         record = self.records_by_id.get(self.selected_id or "")
         if not record or not record.valid:
             return
+        if record.is_cloud:
+            self._status("Codex 云端人物请在 Codex 设置中切换")
+            return
         try:
             if record.enabled:
                 self.repository.disable(record.id)
@@ -1022,7 +1140,14 @@ class PetManagerApp:
         record = self.records_by_id.get(self.selected_id or "")
         if not record:
             return
-        others = [item for item in self.records if item.id != record.id and item.enabled]
+        if record.is_cloud:
+            self._status("Codex 云端人物不能作为本地保留目标")
+            return
+        others = [
+            item
+            for item in self.records
+            if item.id != record.id and item.enabled and not item.is_cloud
+        ]
         if not others:
             if not record.enabled:
                 self.toggle_selected()
@@ -1048,6 +1173,9 @@ class PetManagerApp:
         record = self.records_by_id.get(self.selected_id or "")
         if not record:
             return
+        if record.is_cloud:
+            self._status("Codex 云端人物请在 Codex 设置中修改")
+            return
         dialog = EditDialog(self.root, record)
         self.root.wait_window(dialog)
         if not dialog.result:
@@ -1062,6 +1190,9 @@ class PetManagerApp:
     def delete_selected(self):
         record = self.records_by_id.get(self.selected_id or "")
         if not record:
+            return
+        if record.is_cloud:
+            self._status("Codex 云端人物不能被管理台删除")
             return
         if not messagebox.askyesno(
             "删除人物",
@@ -1196,11 +1327,17 @@ class PetManagerApp:
         ))
 
     def _close(self):
-        if self.after_program_refresh:
-            try:
-                self.root.after_cancel(self.after_program_refresh)
-            except tk.TclError:
-                pass
+        for callback in (
+            self.after_program_refresh,
+            self.after_pet_poll,
+            self.after_cloud_poll,
+            self.after_cloud_result,
+        ):
+            if callback:
+                try:
+                    self.root.after_cancel(callback)
+                except tk.TclError:
+                    pass
         if self.preview.after_id:
             try:
                 self.root.after_cancel(self.preview.after_id)

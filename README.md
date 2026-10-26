@@ -5,13 +5,13 @@
 ## 下载
 
 [![下载 Windows x64](https://img.shields.io/badge/下载-Windows%20x64-137C8B?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/releases/latest)
-[![下载源码](https://img.shields.io/badge/下载-源码-384956?style=for-the-badge&logo=github&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/archive/refs/tags/v1.0.4.zip)
+[![下载源码](https://img.shields.io/badge/下载-源码-384956?style=for-the-badge&logo=github&logoColor=white)](https://github.com/20051010wsy-byte/codex-pet-manager/archive/refs/tags/v1.0.5.zip)
 
-- [Windows x64 兼容版（推荐）](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.4/CodexPetManager-v1.0.4-windows-x64.zip)
-- [Windows x64 单文件版](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.4/CodexPetManager-v1.0.4-single-file-x64.zip)
-- [直接下载单文件 EXE](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.4/CodexPetManager-v1.0.4-single-file-x64.exe)
-- [完整源码 ZIP](https://github.com/20051010wsy-byte/codex-pet-manager/archive/refs/tags/v1.0.4.zip)
-- [全部版本与校验文件](https://github.com/20051010wsy-byte/codex-pet-manager/releases/tag/v1.0.4)
+- [Windows x64 兼容版（推荐）](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.5/CodexPetManager-v1.0.5-windows-x64.zip)
+- [Windows x64 单文件版](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.5/CodexPetManager-v1.0.5-single-file-x64.zip)
+- [直接下载单文件 EXE](https://github.com/20051010wsy-byte/codex-pet-manager/releases/download/v1.0.5/CodexPetManager-v1.0.5-single-file-x64.exe)
+- [完整源码 ZIP](https://github.com/20051010wsy-byte/codex-pet-manager/archive/refs/tags/v1.0.5.zip)
+- [全部版本与校验文件](https://github.com/20051010wsy-byte/codex-pet-manager/releases/tag/v1.0.5)
 
 Windows 用户优先下载兼容版 ZIP。完整解压后，保留 `CodexPetManager.exe` 与 `_internal` 文件夹的相对位置，再运行 EXE。兼容版无需自解压，也不会使用 UPX 压缩，可减少被安全软件误拦截的情况。
 
@@ -22,7 +22,10 @@ Windows 用户优先下载兼容版 ZIP。完整解压后，保留 `CodexPetMana
 ## 功能
 
 - 扫描 `~/.codex/pets` 和 `~/.codex/avatars`
+- 自动识别 `CODEX_HOME` 和嵌套的人物目录
 - 支持 `pet.json` 和 `avatar.json`
+- 只读同步 Codex 云端人物缓存，不需要导出人物文件
+- 自动监控 Codex 目录和云端缓存，新下载人物会自动出现
 - 预览人物图集中的九种标准动画
 - 启用或停用人物
 - 仅保留指定人物
@@ -32,6 +35,8 @@ Windows 用户优先下载兼容版 ZIP。完整解压后，保留 `CodexPetMana
 - 启动或停止 BailongPet、dsh-pet
 
 管理台通过移动本地人物目录来控制人物是否出现在 Mini & Pets 的候选中。最终显示哪个人物，仍然在 Codex 的 **设置 → Mini & Pets** 里选择。
+
+云端人物会显示为“Codex 云端缓存”，只用于预览和管理台查看；切换、修改和删除仍需在 Codex 中完成。
 
 ## 从源码运行
 
@@ -60,6 +65,14 @@ Windows 也可以直接双击 `run.bat`。
 ```
 
 停用只是移动目录，不会删除人物文件。重新启用后会恢复。
+
+云端人物缓存目录：
+
+```text
+%LOCALAPPDATA%\CodexPetManager\cloud-pets
+```
+
+管理台只读取 Codex 的 Local Storage，不会修改 Codex 的账号缓存。
 
 ## 人物包格式
 

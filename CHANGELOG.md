@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.5
+
+- Added automatic discovery for new local Codex pets, including nested manifest folders.
+- Added `CODEX_HOME` support for custom Codex data directories.
+- Added read-only synchronization of Codex cloud pet artwork from the local Chromium cache.
+- Added background directory monitoring, so opened new pets appear without restarting.
+- Marked cloud cached pets as read-only to avoid changing account-managed Codex data.
+- Added regression tests for nested pets, cloud cache parsing, secure downloads, and read-only protection.
+
 ## v1.0.4
 
 - Added a recommended folder-based portable build that avoids one-file self-extraction.

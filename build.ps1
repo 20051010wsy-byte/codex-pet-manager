@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.0.4"
+    [string]$Version = "1.0.5"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +15,7 @@ $distRoot = Join-Path $root "dist"
 $buildRoot = Join-Path $root "build"
 $specRoot = Join-Path $root "build\spec"
 $releaseRoot = Join-Path $root "release"
+$vendorRoot = Join-Path $root "vendor"
 New-Item -ItemType Directory -Force -Path $distRoot, $buildRoot, $specRoot, $releaseRoot | Out-Null
 
 $commonArgs = @(
@@ -26,6 +27,9 @@ $commonArgs = @(
     "--icon", $icon,
     "--add-data", "$icon;assets",
     "--hidden-import", "PIL._tkinter_finder",
+    "--hidden-import", "ccl_chromium_reader.ccl_chromium_localstorage",
+    "--hidden-import", "ccl_simplesnappy",
+    "--paths", $vendorRoot,
     $script
 )
 
@@ -52,7 +56,7 @@ python -m PyInstaller @commonArgs `
 function Copy-ReleaseDocs {
     param([string]$Destination)
 
-    foreach ($file in @("README.md", "LICENSE", "CHANGELOG.md")) {
+    foreach ($file in @("README.md", "LICENSE", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md")) {
         Copy-Item -LiteralPath (Join-Path $root $file) -Destination $Destination
     }
     $docs = Join-Path $Destination "docs"

@@ -22,6 +22,7 @@ ATLAS_SIZES = {
 METADATA_NAMES = {
     "pets": "pet.json",
     "avatars": "avatar.json",
+    "cloud": "pet.json",
 }
 
 
@@ -46,6 +47,8 @@ class PetRecord:
     def status_label(self) -> str:
         if not self.valid:
             return "文件异常"
+        if self.is_cloud:
+            return "云端同步"
         return "已启用" if self.enabled else "已停用"
 
     @property
@@ -63,7 +66,13 @@ class PetRecord:
             return "Pets"
         if keys == ["avatars"]:
             return "Mini"
+        if keys == ["cloud"]:
+            return "Codex 云端缓存"
         return "本地"
+
+    @property
+    def is_cloud(self) -> bool:
+        return bool(self.locations) and set(self.locations) == {"cloud"}
 
     @property
     def primary_dir(self) -> Path | None:
@@ -126,6 +135,20 @@ def metadata_candidates(root: Path) -> list[Path]:
     return sorted(result)
 
 
+def metadata_directories(root: Path, metadata_name: str) -> list[Path]:
+    if not root.is_dir():
+        return []
+    found = []
+    for path in root.rglob(metadata_name):
+        if not path.is_file():
+            continue
+        folder = path.parent
+        if any(other != folder and other in folder.parents for other in found):
+            continue
+        found.append(folder)
+    return sorted(found)
+
+
 def slugify(value: str) -> str:
     ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_value).strip("-").lower()
@@ -141,16 +164,29 @@ class PetRepository:
         codex_home: Path | None = None,
         pets_dir: Path | None = None,
         avatars_dir: Path | None = None,
+        cloud_dir: Path | None = None,
         disabled_dir: Path | None = None,
     ):
         configured_home = (
             codex_home
             or os.environ.get("CODEX_PET_MANAGER_HOME")
+            or os.environ.get("CODEX_HOME")
             or Path.home() / ".codex"
         )
         self.codex_home = Path(configured_home).expanduser().resolve()
         self.pets_dir = Path(pets_dir or self.codex_home / "pets")
         self.avatars_dir = Path(avatars_dir or self.codex_home / "avatars")
+        local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        if cloud_dir is not None:
+            configured_cloud_dir = cloud_dir
+        elif codex_home is not None:
+            configured_cloud_dir = self.codex_home / "cloud-pets"
+        else:
+            configured_cloud_dir = (
+                os.environ.get("CODEX_PET_MANAGER_CLOUD_CACHE")
+                or local / "CodexPetManager" / "cloud-pets"
+            )
+        self.cloud_dir = Path(configured_cloud_dir)
         self.disabled_dir = Path(
             disabled_dir or self.codex_home / "pet-manager" / "disabled"
         )
@@ -159,6 +195,7 @@ class PetRepository:
     def ensure_directories(self) -> None:
         self.pets_dir.mkdir(parents=True, exist_ok=True)
         self.avatars_dir.mkdir(parents=True, exist_ok=True)
+        self.cloud_dir.mkdir(parents=True, exist_ok=True)
         self.disabled_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_candidate(self, folder: Path, kind: str) -> PetRecord | None:
@@ -169,8 +206,9 @@ class PetRepository:
             data = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             self.last_errors.append(f"{metadata_path}: {error}")
+            error_id = folder.name if kind != "cloud" else f"cloud:{folder.name}"
             return PetRecord(
-                id=folder.name,
+                id=error_id,
                 display_name=folder.name,
                 description="",
                 sprite_version=1,
@@ -182,6 +220,8 @@ class PetRepository:
             )
 
         pet_id = str(data.get("id") or folder.name)
+        if kind == "cloud":
+            pet_id = f"cloud:{pet_id}"
         display_name = str(data.get("displayName") or pet_id)
         description = str(data.get("description") or "")
         try:
@@ -222,9 +262,13 @@ class PetRepository:
         self.ensure_directories()
         self.last_errors = []
         records: dict[str, PetRecord] = {}
-        for kind, root in (("pets", self.pets_dir), ("avatars", self.avatars_dir)):
-            for folder in sorted(root.iterdir()):
-                if not folder.is_dir():
+        for kind, root in (
+            ("pets", self.pets_dir),
+            ("avatars", self.avatars_dir),
+            ("cloud", self.cloud_dir),
+        ):
+            for folder in metadata_directories(root, METADATA_NAMES[kind]):
+                if kind == "cloud" and not folder.name.startswith("pet_"):
                     continue
                 record = self._load_candidate(folder, kind)
                 if record is None:
@@ -275,11 +319,33 @@ class PetRepository:
             key=lambda item: (not item.enabled, item.display_name.casefold(), item.id),
         )
 
+    def signature(self) -> tuple[tuple[str, int, int], ...]:
+        entries = []
+        roots = (
+            (self.pets_dir, METADATA_NAMES["pets"]),
+            (self.avatars_dir, METADATA_NAMES["avatars"]),
+            (self.cloud_dir, METADATA_NAMES["cloud"]),
+            (self.disabled_dir, METADATA_NAMES["pets"]),
+            (self.disabled_dir, METADATA_NAMES["avatars"]),
+        )
+        for root, name in roots:
+            if not root.is_dir():
+                continue
+            for path in root.rglob(name):
+                try:
+                    stat = path.stat()
+                except OSError:
+                    continue
+                entries.append((str(path), stat.st_size, stat.st_mtime_ns))
+        return tuple(sorted(entries, key=lambda item: item[0].casefold()))
+
     def find(self, pet_id: str) -> PetRecord | None:
         return next((item for item in self.scan() if item.id == pet_id), None)
 
     def disable(self, pet_id: str) -> None:
         record = self.find(pet_id)
+        if record and record.is_cloud:
+            raise ValueError("Codex 云端人物为只读缓存，请在 Codex 设置中管理。")
         if not record or not record.enabled:
             return
         store = self.disabled_dir / pet_id
@@ -325,6 +391,9 @@ class PetRepository:
             store.rmdir()
 
     def delete(self, pet_id: str) -> None:
+        record = self.find(pet_id)
+        if record and record.is_cloud:
+            raise ValueError("Codex 云端人物为只读缓存，不能从管理台删除。")
         for folder in (
             self.pets_dir / pet_id,
             self.avatars_dir / pet_id,
@@ -337,6 +406,8 @@ class PetRepository:
         record = self.find(pet_id)
         if not record:
             raise FileNotFoundError(pet_id)
+        if record.is_cloud:
+            raise ValueError("Codex 云端人物为只读缓存，请在 Codex 设置中修改。")
         if not display_name.strip():
             raise ValueError("人物名称不能为空")
         for metadata_path in self._metadata_paths(record):

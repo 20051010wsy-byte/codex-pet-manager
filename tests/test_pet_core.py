@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import patch
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -110,6 +111,75 @@ class PetRepositoryTests(unittest.TestCase):
         imported = self.repo.import_zip(archive)
         self.assertEqual(len(imported), 1)
         self.assertEqual(len(self.repo.scan()), 1)
+
+    def test_finds_nested_pet_manifest(self) -> None:
+        nested = self.repo.pets_dir / "downloaded" / "nested-pet"
+        make_sheet(nested / "spritesheet.webp")
+        (nested / "pet.json").write_text(
+            json.dumps(
+                {
+                    "id": "nested-pet",
+                    "displayName": "嵌套人物",
+                    "spriteVersionNumber": 1,
+                    "spritesheetPath": "spritesheet.webp",
+                }
+            ),
+            encoding="utf-8",
+        )
+        records = self.repo.scan()
+        self.assertEqual([record.id for record in records], ["nested-pet"])
+
+    def test_uses_codex_home_environment(self) -> None:
+        cloud = Path(self.temp.name) / "cloud"
+        with patch.dict("os.environ", {"CODEX_HOME": str(self.root)}, clear=False):
+            repo = PetRepository(cloud_dir=cloud)
+        self.assertEqual(repo.codex_home, self.root.resolve())
+
+    def test_cloud_cache_is_read_only(self) -> None:
+        cloud_pet = self.repo.cloud_dir / "pet_cloud123"
+        make_sheet(cloud_pet / "spritesheet.webp")
+        (cloud_pet / "pet.json").write_text(
+            json.dumps(
+                {
+                    "id": "pet_cloud123",
+                    "displayName": "云端人物",
+                    "spriteVersionNumber": 1,
+                    "spritesheetPath": "spritesheet.webp",
+                }
+            ),
+            encoding="utf-8",
+        )
+        record = self.repo.scan()[0]
+        self.assertTrue(record.is_cloud)
+        self.assertEqual(record.id, "cloud:pet_cloud123")
+        self.assertEqual(record.source_label, "Codex 云端缓存")
+        with self.assertRaises(ValueError):
+            self.repo.disable(record.id)
+        with self.assertRaises(ValueError):
+            self.repo.delete(record.id)
+        with self.assertRaises(ValueError):
+            self.repo.update_metadata(record.id, "不可修改", "")
+
+    def test_local_and_cloud_pet_with_same_source_id_stay_separate(self) -> None:
+        self.add_pet("pet_duplicate", "本地同名人物")
+        cloud_pet = self.repo.cloud_dir / "pet_duplicate"
+        make_sheet(cloud_pet / "spritesheet.webp")
+        (cloud_pet / "pet.json").write_text(
+            json.dumps(
+                {
+                    "id": "pet_duplicate",
+                    "displayName": "云端同名人物",
+                    "spriteVersionNumber": 1,
+                    "spritesheetPath": "spritesheet.webp",
+                }
+            ),
+            encoding="utf-8",
+        )
+        records = self.repo.scan()
+        self.assertEqual(
+            {record.id for record in records},
+            {"pet_duplicate", "cloud:pet_duplicate"},
+        )
 
 
 if __name__ == "__main__":
